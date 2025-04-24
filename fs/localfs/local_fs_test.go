@@ -22,44 +22,72 @@ type fileEnt struct {
 	isFile bool
 }
 
+func TestSymlink(t *testing.T) {
+	tmp := testutil.TempDirectory(t)
+
+	fn := filepath.Join(tmp, "target")
+	absLink := filepath.Join(tmp, "abslink")
+	relLink := filepath.Join(tmp, "rellink")
+
+	require.NoError(t, os.WriteFile(fn, []byte{1, 2, 3}, 0o777))
+	require.NoError(t, os.Symlink(fn, absLink))
+	require.NoError(t, os.Symlink("./target", relLink))
+
+	verifyLink(t, absLink, fn)
+	verifyLink(t, relLink, fn)
+}
+
+func verifyLink(t *testing.T, path, expected string) {
+	t.Helper()
+
+	ctx := testlogging.Context(t)
+
+	entry, err := NewEntry(path)
+	require.NoError(t, err)
+
+	link, ok := entry.(fs.Symlink)
+	require.True(t, ok, "entry is not a symlink:", entry)
+
+	target, err := link.Resolve(ctx)
+	require.NoError(t, err)
+
+	f, ok := target.(fs.File)
+	require.True(t, ok, "link does not point to a file:", path)
+
+	// Canonicalize paths (for example, on MacOS /var points to /private/var)
+	// EvalSymlinks calls "Clean" on the result
+	got, err := filepath.EvalSymlinks(f.LocalFilesystemPath())
+	require.NoError(t, err)
+
+	want, err := filepath.EvalSymlinks(expected)
+	require.NoError(t, err)
+
+	require.Equal(t, want, got)
+}
+
 //nolint:gocyclo
 func TestFiles(t *testing.T) {
 	ctx := testlogging.Context(t)
-
-	var err error
-
 	tmp := testutil.TempDirectory(t)
 
-	var dir fs.Directory
-
 	// Try listing directory that does not exist.
-	_, err = Directory(fmt.Sprintf("/no-such-dir-%v", clock.Now().Nanosecond()))
-	if err == nil {
-		t.Errorf("expected error when dir directory that does not exist.")
-	}
+	_, err := Directory(fmt.Sprintf("/no-such-dir-%v", clock.Now().Nanosecond()))
+	require.Error(t, err, "expected error when dir directory that does not exist.")
 
 	// Now list an empty directory that does exist.
-	dir, err = Directory(tmp)
-	if err != nil {
-		t.Errorf("error when dir empty directory: %v", err)
-	}
+	dir, err := Directory(tmp)
+	require.NoError(t, err, "error when dir empty directory")
 
 	entries, err := fs.GetAllEntries(ctx, dir)
-	if err != nil {
-		t.Errorf("error gettind dir Entries: %v", err)
-	}
-
-	if len(entries) > 0 {
-		t.Errorf("expected empty directory, got %v", dir)
-	}
+	require.NoError(t, err, "error gettind dir Entries")
+	require.Empty(t, entries, "expected empty directory")
 
 	// Now list a directory with 3 files.
-	assertNoError(t, os.WriteFile(filepath.Join(tmp, "f3"), []byte{1, 2, 3}, 0o777))
-	assertNoError(t, os.WriteFile(filepath.Join(tmp, "f2"), []byte{1, 2, 3, 4}, 0o777))
-	assertNoError(t, os.WriteFile(filepath.Join(tmp, "f1"), []byte{1, 2, 3, 4, 5}, 0o777))
-
-	assertNoError(t, os.Mkdir(filepath.Join(tmp, "z"), 0o777))
-	assertNoError(t, os.Mkdir(filepath.Join(tmp, "y"), 0o777))
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "f3"), []byte{1, 2, 3}, 0o777))
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "f2"), []byte{1, 2, 3, 4}, 0o777))
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "f1"), []byte{1, 2, 3, 4, 5}, 0o777))
+	require.NoError(t, os.Mkdir(filepath.Join(tmp, "z"), 0o777))
+	require.NoError(t, os.Mkdir(filepath.Join(tmp, "y"), 0o777))
 
 	expected := map[string]fileEnt{
 		"f1": {
@@ -85,14 +113,10 @@ func TestFiles(t *testing.T) {
 	}
 
 	dir, err = Directory(tmp)
-	if err != nil {
-		t.Errorf("error when dir directory with files: %v", err)
-	}
+	require.NoError(t, err, "error when dir directory with files")
 
 	entries, err = fs.GetAllEntries(ctx, dir)
-	if err != nil {
-		t.Errorf("error gettind dir Entries: %v", err)
-	}
+	require.NoError(t, err, "error gettind dir Entries")
 
 	goodCount := 0
 
@@ -147,7 +171,7 @@ func TestIterateNonExistent(t *testing.T) {
 
 	ctx := testlogging.Context(t)
 
-	require.ErrorIs(t, dir.IterateEntries(ctx, func(ctx context.Context, e fs.Entry) error {
+	require.ErrorIs(t, fs.IterateEntries(ctx, dir, func(ctx context.Context, e fs.Entry) error {
 		t.Fatal("this won't be invoked")
 		return nil
 	}), os.ErrNotExist)
@@ -157,8 +181,8 @@ func TestIterateNonExistent(t *testing.T) {
 func testIterate(t *testing.T, nFiles int) {
 	tmp := testutil.TempDirectory(t)
 
-	for i := 0; i < nFiles; i++ {
-		assertNoError(t, os.WriteFile(filepath.Join(tmp, fmt.Sprintf("f%v", i)), []byte{1, 2, 3}, 0o777))
+	for i := range nFiles {
+		require.NoError(t, os.WriteFile(filepath.Join(tmp, fmt.Sprintf("f%v", i)), []byte{1, 2, 3}, 0o777))
 	}
 
 	dir, err := Directory(tmp)
@@ -168,7 +192,7 @@ func testIterate(t *testing.T, nFiles int) {
 
 	names := map[string]int64{}
 
-	require.NoError(t, dir.IterateEntries(ctx, func(ctx context.Context, e fs.Entry) error {
+	require.NoError(t, fs.IterateEntries(ctx, dir, func(ctx context.Context, e fs.Entry) error {
 		names[e.Name()] = e.Size()
 		return nil
 	}))
@@ -179,7 +203,7 @@ func testIterate(t *testing.T, nFiles int) {
 
 	cnt := 0
 
-	require.ErrorIs(t, dir.IterateEntries(ctx, func(ctx context.Context, e fs.Entry) error {
+	require.ErrorIs(t, fs.IterateEntries(ctx, dir, func(ctx context.Context, e fs.Entry) error {
 		cnt++
 
 		if cnt == nFiles/10 {
@@ -191,7 +215,7 @@ func testIterate(t *testing.T, nFiles int) {
 
 	cnt = 0
 
-	require.ErrorIs(t, dir.IterateEntries(ctx, func(ctx context.Context, e fs.Entry) error {
+	require.ErrorIs(t, fs.IterateEntries(ctx, dir, func(ctx context.Context, e fs.Entry) error {
 		cnt++
 
 		if cnt == nFiles-1 {
@@ -206,41 +230,23 @@ func verifyChild(t *testing.T, dir fs.Directory) {
 	t.Helper()
 
 	ctx := testlogging.Context(t)
-
 	child, err := dir.Child(ctx, "f3")
-	if err != nil {
-		t.Errorf("child error: %v", err)
-	}
 
-	if _, err = dir.Child(ctx, "f4"); !errors.Is(err, fs.ErrEntryNotFound) {
-		t.Errorf("unexpected child error: %v", err)
-	}
+	require.NoError(t, err, "child error")
+	require.Equal(t, "f3", child.Name(), "unexpected child name")
+	require.Equal(t, int64(3), child.Size(), "unexpected child size")
 
-	if got, want := child.Name(), "f3"; got != want {
-		t.Errorf("unexpected child name: %v, want %v", got, want)
-	}
+	_, err = dir.Child(ctx, "f4")
+	require.ErrorIs(t, err, fs.ErrEntryNotFound, "unexpected child error")
 
-	if got, want := child.Size(), int64(3); got != want {
-		t.Errorf("unexpected child size: %v, want %v", got, want)
-	}
-
-	if _, err = fs.IterateEntriesAndFindChild(ctx, dir, "f4"); !errors.Is(err, fs.ErrEntryNotFound) {
-		t.Errorf("unexpected child error: %v", err)
-	}
+	_, err = fs.IterateEntriesAndFindChild(ctx, dir, "f4")
+	require.ErrorIs(t, err, fs.ErrEntryNotFound, "unexpected child error")
 
 	// read child again, this time using IterateEntriesAndFindChild
 	child2, err := fs.IterateEntriesAndFindChild(ctx, dir, "f3")
-	if err != nil {
-		t.Errorf("child2 error: %v", err)
-	}
-
-	if got, want := child2.Name(), "f3"; got != want {
-		t.Errorf("unexpected child2 name: %v, want %v", got, want)
-	}
-
-	if got, want := child2.Size(), int64(3); got != want {
-		t.Errorf("unexpected child2 size: %v, want %v", got, want)
-	}
+	require.NoError(t, err, "child2 error")
+	require.Equal(t, "f3", child2.Name(), "unexpected child name")
+	require.Equal(t, int64(3), child2.Size(), "unexpected child size")
 }
 
 func TestLocalFilesystemPath(t *testing.T) {
@@ -291,13 +297,5 @@ func TestDirPrefix(t *testing.T) {
 
 	for input, want := range cases {
 		require.Equal(t, want, dirPrefix(input), input)
-	}
-}
-
-func assertNoError(t *testing.T, err error) {
-	t.Helper()
-
-	if err != nil {
-		t.Errorf("err: %v", err)
 	}
 }

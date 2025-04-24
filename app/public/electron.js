@@ -1,13 +1,16 @@
-const { app, BrowserWindow, Notification, screen, Menu, Tray, ipcMain, dialog, shell } = require('electron')
-const { autoUpdater } = require("electron-updater");
-const { resourcesPath, selectByOS } = require('./utils');
-const { toggleLaunchAtStartup, willLaunchAtStartup, refreshWillLaunchAtStartup } = require('./auto-launch');
-const { serverForRepo } = require('./server');
-const { loadConfigs, allConfigs, deleteConfigIfDisconnected, addNewConfig, configDir, isFirstRun, isPortableConfig } = require('./config');
-const Store = require('electron-store')
-const log = require("electron-log");
-const path = require('path');
-const isDev = require('electron-is-dev');
+import { app, BrowserWindow, Notification, screen, Menu, Tray, ipcMain, dialog, shell } from 'electron';
+import pkg from "electron-updater";
+const autoUpdater = pkg.autoUpdater;
+import { iconsPath, publicPath, selectByOS } from './utils.js';
+import { toggleLaunchAtStartup, willLaunchAtStartup, refreshWillLaunchAtStartup } from './auto-launch.js';
+import { setNotificationLevel, getNotificationLevel } from './notifications.js';
+import { serverForRepo } from './server.js';
+import { loadConfigs, allConfigs, deleteConfigIfDisconnected, addNewConfig, configDir, isFirstRun, isPortableConfig } from './config.js';
+
+import Store from 'electron-store';
+import log from "electron-log";
+import path from 'path';
+import crypto from 'crypto';
 
 // Store to save parameters
 const store = new Store();
@@ -18,12 +21,47 @@ let tray = null
 let repositoryWindows = {};
 let repoIDForWebContents = {};
 
+
 if (isPortableConfig()) {
   // in portable mode, write cache under 'repositories'
   app.setPath('userData', path.join(configDir(), 'cache'));
 }
 
+/**
+ * Stores the ids of the currently connected displays. 
+ * The ids are sorted to generate a hash that specifies the current display configuration
+ * @returns A hash of the configuration
+ */
+function getDisplayConfiguration() {
+  // Stores the IDs all all currently connected displays
+  let config = []
+  let sha256 = crypto.createHash('sha256')
+  // Get all displays
+  let displays = screen.getAllDisplays()
+  let isFactorEqual = false
+  // Stores the previous factor - initialized with the primary scaling factor
+  let prevFactor = screen.getPrimaryDisplay().scaleFactor
+  //Workaround until https://github.com/electron/electron/issues/10862 is fixed
+  for (let dsp in displays) {
+    // Add the id to the config
+    config.push(displays[dsp].id)
+    isFactorEqual = prevFactor === displays[dsp].scaleFactor
+    // Update the previous factors
+    prevFactor = displays[dsp].scaleFactor
+  }
+  // Sort IDs to prevent different hashes through permutation
+  config.sort()
+  sha256.update(config.toString())
+  return { "hash": sha256.digest('hex'), "factorsEqual": isFactorEqual }
+}
+
+/**
+ * Creates a repository window with given options and parameters
+ * @param {*} repositoryID
+ * The id for that specific repository used as a reference for that window 
+ */
 function showRepoWindow(repositoryID) {
+  let primaryScreenBounds = screen.getPrimaryDisplay().bounds
   if (repositoryWindows[repositoryID]) {
     repositoryWindows[repositoryID].focus();
     return;
@@ -31,48 +69,38 @@ function showRepoWindow(repositoryID) {
 
   let windowOptions = {
     title: 'KopiaUI is Loading...',
-
     // default width
     width: 1000,
     // default height
     height: 700,
-
+    // default x location
+    x: (primaryScreenBounds.width - 1000) / 2,
+    // default y location
+    y: (primaryScreenBounds.height - 700) / 2,
     autoHideMenuBar: true,
     resizable: true,
+    show: false,
     webPreferences: {
-      preload: path.join(resourcesPath(), 'preload.js'),
+      preload: path.join(publicPath(), 'preload.js'),
     },
   };
 
+  // The bounds of the windows
+  let configuration = getDisplayConfiguration()
+  let winBounds = store.get(configuration.hash)
+  let maximized = store.get('maximized')
 
-  // Workaround until https://github.com/electron/electron/issues/10862 is fixed
-  // Get all displays
-  let displays = screen.getAllDisplays()
-  // There should be only one primary display
-  let prevFactor = screen.getPrimaryDisplay().scaleFactor
-  // True if all factors are equal, false else
-  let isFactorEqual = true
-
-  if (displays.length > 0) {
-    for (let d in displays) {
-      let factor = displays[d].scaleFactor
-      if (prevFactor != factor) {
-        isFactorEqual = false
-        break
-      }
-      prevFactor = factor
-    }
+  if (configuration.factorsEqual) {
+    Object.assign(windowOptions, winBounds);
   }
 
-  // Assign the bounds if all factors are equal, else revert to defaults
-  if (isFactorEqual) {
-    Object.assign(windowOptions, store.get('winBounds'));
-    Object.assign(windowOptions, store.get('maximized'))
-  }
-  
+  // Create the browser window
   let repositoryWindow = new BrowserWindow(windowOptions)
+  // If the window was maximized, maximize it
+  if (maximized) {
+    repositoryWindow.maximize()
+  }
   const webContentsID = repositoryWindow.webContents.id;
-
   repositoryWindows[repositoryID] = repositoryWindow
   repoIDForWebContents[webContentsID] = repositoryID
 
@@ -96,9 +124,16 @@ function showRepoWindow(repositoryID) {
    * Store the window size, height and position on close
    */
   repositoryWindow.on('close', function () {
-    store.set('winBounds', repositoryWindow.getBounds())
+    store.set(getDisplayConfiguration().hash, repositoryWindow.getBounds())
     store.set('maximized', repositoryWindow.isMaximized())
-  });
+  })
+
+  /**
+   * Show the window once the content is ready
+   */
+  repositoryWindow.once('ready-to-show', function () {
+    repositoryWindow.show()
+  })
 
   /**
    * Delete references to the repository window
@@ -113,7 +148,6 @@ function showRepoWindow(repositoryID) {
     if (deleteConfigIfDisconnected(repositoryID)) {
       s.stopServer();
     }
-
     updateDockIcon();
   })
 }
@@ -169,7 +203,7 @@ app.on('certificate-error', (event, webContents, _url, _error, certificate, call
 
 /**
  * Ignore to let the application run, when all windows are closed 
- */ 
+ */
 app.on('window-all-closed', function () { })
 
 ipcMain.handle('select-dir', async (_event, _arg) => {
@@ -190,6 +224,7 @@ ipcMain.handle('browse-dir', async (_event, path) => {
 
 ipcMain.on('server-status-updated', updateTrayContextMenu);
 ipcMain.on('launch-at-startup-updated', updateTrayContextMenu);
+ipcMain.on('notification-config-updated', updateTrayContextMenu);
 
 let updateAvailableInfo = null;
 let updateDownloadStatusInfo = "";
@@ -311,7 +346,7 @@ function viewReleaseNotes() {
 }
 
 function isOutsideOfApplicationsFolderOnMac() {
-  if (isDev || isPortableConfig()) {
+  if (!app.isPackaged || isPortableConfig()) {
     return false;
   }
 
@@ -390,7 +425,7 @@ app.on('ready', () => {
 
   tray = new Tray(
     path.join(
-      resourcesPath(), 'icons',
+      iconsPath(),
       selectByOS({ mac: 'kopiaTrayTemplate.png', win: 'kopia-tray.ico', linux: 'kopia-tray.png' })));
 
   tray.setToolTip('Kopia');
@@ -433,8 +468,41 @@ app.on('ready', () => {
   }
 })
 
+function showRepoNotification(e) {
+  const nl = getNotificationLevel();
+  if (nl === 0) {
+    // notifications disabled
+    return;
+  }
+  
+  if (e.severity < 10 && nl === 1) {
+    // non-important notifications disabled.
+    return;
+  }
+
+  let urgency = "normal";
+
+  if (e.severity < 0) {
+    urgency = "low";
+  } else if (e.severity >= 10) { // warnings and errors
+    urgency = "critical";
+  } else {
+    urgency = "normal";
+  }
+
+  const notification = new Notification({
+    title: e.notification.subject,
+    body: e.notification.body,
+    urgency: urgency
+  });
+
+  notification.on('click', () => showRepoWindow(e.repositoryID));
+  notification.show();
+}
+
 ipcMain.addListener('config-list-updated-event', () => updateTrayContextMenu());
 ipcMain.addListener('status-updated-event', () => updateTrayContextMenu());
+ipcMain.addListener('repo-notification-event', showRepoNotification);
 
 function addAnotherRepository() {
   const repoID = addNewConfig();
@@ -497,7 +565,9 @@ function updateTrayContextMenu() {
     autoUpdateMenuItems.push({ label: "KopiaUI is up-to-date: " + app.getVersion(), enabled: false });
   }
 
-  template = defaultReposTemplates.concat(additionalReposTemplates).concat([
+  const nl = getNotificationLevel();
+
+  let template = defaultReposTemplates.concat(additionalReposTemplates).concat([
     { type: 'separator' },
     { label: 'Connect To Another Repository...', click: addAnotherRepository },
     { type: 'separator' },
@@ -505,6 +575,11 @@ function updateTrayContextMenu() {
   ]).concat(autoUpdateMenuItems).concat([
     { type: 'separator' },
     { label: 'Launch At Startup', type: 'checkbox', click: toggleLaunchAtStartup, checked: willLaunchAtStartup() },
+    { label: 'Notifications', type: 'submenu', submenu: [
+      { label: 'Enabled', type: 'radio', click: () => setNotificationLevel(2), checked: nl === 2 },
+      { label: 'Warnings And Errors', type: 'radio', click: () => setNotificationLevel(1), checked: nl === 1 },
+      { label: 'Disabled', type: 'radio', click: () => setNotificationLevel(0), checked: nl === 0 },
+    ] },
     { label: 'Quit', role: 'quit' },
   ]);
 

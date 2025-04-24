@@ -123,6 +123,7 @@ func TestSourceRefreshesAfterPolicy(t *testing.T) {
 			TimesOfDay: []policy.TimeOfDay{
 				{Hour: (currentHour + 2) % 24, Minute: 33},
 			},
+			RunMissed: policy.NewOptionalBool(false),
 		},
 	})
 
@@ -136,13 +137,14 @@ func TestSourceRefreshesAfterPolicy(t *testing.T) {
 			TimesOfDay: []policy.TimeOfDay{
 				{Hour: (currentHour + 2) % 24, Minute: 55},
 			},
+			RunMissed: policy.NewOptionalBool(false),
 		},
 	})
 
 	// make sure that soon after setting policy, the next snapshot time is up-to-date.
 	match := false
 
-	for attempt := 0; attempt < 15; attempt++ {
+	for range 15 {
 		sources = mustListSources(t, cli, &snapshot.SourceInfo{})
 		require.Len(t, sources, 1)
 		require.NotNil(t, sources[0].NextSnapshotTime)
