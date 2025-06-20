@@ -10,7 +10,7 @@ ENV 		DEBIAN_FRONTEND="noninteractive" \
 		    KOPIA_CACHE_DIRECTORY=/app/cache \
 		    RCLONE_CONFIG=/app/rclone/rclone.conf \
 		    KOPIA_PERSIST_CREDENTIALS_ON_CONNECT=false \
-		    KOPIA_CHECK_FOR_UPDATES=false
+		    OADP_CHECK_FOR_UPDATES=false
 
 RUN 		apt-get update && \
 		    apt-get upgrade -y --with-new-pkgs && \

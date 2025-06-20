@@ -16,21 +16,21 @@ all:
 
 include tools/tools.mk
 
-kopia_ui_embedded_exe=dist/kopia_$(GOOS)_$(GOARCH)/kopia$(exe_suffix)
+kopia_ui_embedded_exe=dist/kopia_$(GOOS)_$(GOARCH)/oadp$(exe_suffix)
 
 ifeq ($(GOOS),darwin)
 	# on macOS, Kopia uses universal binary that works for AMD64 and ARM64
-	kopia_ui_embedded_exe=dist/kopia_darwin_universal/kopia
+	kopia_ui_embedded_exe=dist/kopia_darwin_universal/oadp
 endif
 
 ifeq ($(GOOS),linux)
 
 ifeq ($(GOARCH),arm)
-	kopia_ui_embedded_exe=dist/kopia_linux_armv7l/kopia
+	kopia_ui_embedded_exe=dist/kopia_linux_armv7l/oadp
 endif
 
 ifeq ($(GOARCH),amd64)
-	kopia_ui_embedded_exe=dist/kopia_linux_x64/kopia
+	kopia_ui_embedded_exe=dist/kopia_linux_x64/oadp
 endif
 
 endif

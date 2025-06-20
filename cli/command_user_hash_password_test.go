@@ -65,7 +65,7 @@ func TestServerUserHashPassword(t *testing.T) {
 	cr := testenv.NewInProcRunner(t)
 	clientEnv := testenv.NewCLITest(t, testenv.RepoFormatNotImportant, cr)
 
-	delete(clientEnv.Environment, "KOPIA_PASSWORD")
+	delete(clientEnv.Environment, "BSLS_PASSWORD")
 
 	clientEnv.RunAndExpectSuccess(t, "repo", "connect", "server",
 		"--url", sp.BaseURL,

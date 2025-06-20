@@ -267,7 +267,7 @@ func enduranceRunner(t *testing.T, runnerID int, fakeTimeServer, webdavServer st
 	e := testenv.NewCLITest(t, testenv.RepoFormatNotImportant, runner)
 
 	e.Environment["KOPIA_FAKE_CLOCK_ENDPOINT"] = fakeTimeServer
-	e.Environment["KOPIA_CHECK_FOR_UPDATES"] = "false"
+	e.Environment["OADP_CHECK_FOR_UPDATES"] = "false"
 
 	e.RunAndExpectSuccess(t, "repo", "connect", "webdav", "--url", webdavServer, "--override-username="+fmt.Sprintf("runner-%v", runnerID))
 

@@ -3,9 +3,9 @@ Command-line tool for creating and accessing backups.
 
 Usage:
 
-	$ kopia [<flags>] <subcommand> [<args> ...]
+	$ oadp [<flags>] <subcommand> [<args> ...]
 
-Use 'kopia help' to see more details.
+Use 'oadp help' to see more details.
 */
 package main
 
@@ -65,7 +65,7 @@ Commands (use --help-full to list all commands):
 
 func main() {
 	app := cli.NewApp()
-	kp := kingpin.New("kopia", "Kopia - Fast And Secure Open-Source Backup").Author("http://kopia.github.io/")
+	kp := kingpin.New("oadp", "oadp - Easily Backup and Restore Files from Your OpenShift KubeVirt VMs").Author("http://kopia.github.io/")
 
 	kp.Version(repo.BuildVersion + " build: " + repo.BuildInfo + " from: " + repo.BuildGitHubRepo)
 	logfile.Attach(app, kp)
