@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	checkForUpdatesEnvar = "KOPIA_CHECK_FOR_UPDATES"
+	checkForUpdatesEnvar = "OADP_CHECK_FOR_UPDATES"
 	githubTimeout        = 10 * time.Second
 )
 

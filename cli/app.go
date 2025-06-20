@@ -30,7 +30,7 @@ import (
 	"github.com/kopia/kopia/snapshot/snapshotmaintenance"
 )
 
-var log = logging.Module("kopia/cli")
+var log = logging.Module("oadp/cli")
 
 var tracer = otel.Tracer("cli")
 
@@ -268,22 +268,20 @@ func (c *App) setup(app *kingpin.Application) {
 	app.Flag("auto-maintenance", "Automatic maintenance").Default("true").Hidden().BoolVar(&c.enableAutomaticMaintenance)
 
 	// hidden flags to control auto-update behavior.
-	app.Flag("initial-update-check-delay", "Initial delay before first time update check").Default("24h").Hidden().Envar(c.EnvName("KOPIA_INITIAL_UPDATE_CHECK_DELAY")).DurationVar(&c.initialUpdateCheckDelay)
+	app.Flag("initial-update-check-delay", "Initial delay before first time update check").Default("24h").Hidden().Envar(c.EnvName("OADP_INITIAL_UPDATE_CHECK_DELAY")).DurationVar(&c.initialUpdateCheckDelay)
 	app.Flag("update-check-interval", "Interval between update checks").Default("168h").Hidden().Envar(c.EnvName("KOPIA_UPDATE_CHECK_INTERVAL")).DurationVar(&c.updateCheckInterval)
-	app.Flag("update-available-notify-interval", "Interval between update notifications").Default("1h").Hidden().Envar(c.EnvName("KOPIA_UPDATE_NOTIFY_INTERVAL")).DurationVar(&c.updateAvailableNotifyInterval)
-	app.Flag("config-file", "Specify the config file to use").Default("repository.config").Envar(c.EnvName("KOPIA_CONFIG_PATH")).StringVar(&c.configPath)
+	app.Flag("update-available-notify-interval", "Interval between update notifications").Default("1h").Hidden().Envar(c.EnvName("OADO_UPDATE_NOTIFY_INTERVAL")).DurationVar(&c.updateAvailableNotifyInterval)
+	app.Flag("config-file", "Specify the config file to use").Default("repository.config").Envar(c.EnvName("OADP_CONFIG_PATH")).StringVar(&c.configPath)
 	app.Flag("trace-storage", "Enables tracing of storage operations.").Default("true").Hidden().BoolVar(&c.traceStorage)
 	app.Flag("timezone", "Format time according to specified time zone (local, utc, original or time zone name)").Hidden().StringVar(&timeZone)
-	app.Flag("password", "Repository password.").Envar(c.EnvName("KOPIA_PASSWORD")).Short('p').StringVar(&c.password)
-	app.Flag("persist-credentials", "Persist credentials").Default("true").Envar(c.EnvName("KOPIA_PERSIST_CREDENTIALS_ON_CONNECT")).BoolVar(&c.persistCredentials)
-	app.Flag("disable-internal-log", "Disable internal log").Hidden().Envar(c.EnvName("KOPIA_DISABLE_INTERNAL_LOG")).BoolVar(&c.disableInternalLog)
-	app.Flag("advanced-commands", "Enable advanced (and potentially dangerous) commands.").Hidden().Envar(c.EnvName("KOPIA_ADVANCED_COMMANDS")).StringVar(&c.AdvancedCommands)
-	app.Flag("track-releasable", "Enable tracking of releasable resources.").Hidden().Envar(c.EnvName("KOPIA_TRACK_RELEASABLE")).StringsVar(&c.trackReleasable)
-	app.Flag("dump-allocator-stats", "Dump allocator stats at the end of execution.").Hidden().Envar(c.EnvName("KOPIA_DUMP_ALLOCATOR_STATS")).BoolVar(&c.dumpAllocatorStats)
-	app.Flag("upgrade-owner-id", "Repository format upgrade owner-id.").Hidden().Envar(c.EnvName("KOPIA_REPO_UPGRADE_OWNER_ID")).StringVar(&c.upgradeOwnerID)
-	app.Flag("upgrade-no-block", "Do not block when repository format upgrade is in progress, instead exit with a message.").Hidden().Default("false").Envar(c.EnvName("KOPIA_REPO_UPGRADE_NO_BLOCK")).BoolVar(&c.doNotWaitForUpgrade)
+	app.Flag("persist-credentials", "Persist credentials").Default("true").Envar(c.EnvName("BSLS_PERSIST_CREDENTIALS_ON_CONNECT")).BoolVar(&c.persistCredentials)
+	app.Flag("disable-internal-log", "Disable internal log").Hidden().Envar(c.EnvName("OADP_DISABLE_INTERNAL_LOG")).BoolVar(&c.disableInternalLog)
+	app.Flag("track-releasable", "Enable tracking of releasable resources.").Hidden().Envar(c.EnvName("OADP_TRACK_RELEASABLE")).StringsVar(&c.trackReleasable)
+	app.Flag("dump-allocator-stats", "Dump allocator stats at the end of execution.").Hidden().Envar(c.EnvName("OADP_DUMP_ALLOCATOR_STATS")).BoolVar(&c.dumpAllocatorStats)
+	app.Flag("upgrade-owner-id", "Repository format upgrade owner-id.").Hidden().Envar(c.EnvName("OADP_REPO_UPGRADE_OWNER_ID")).StringVar(&c.upgradeOwnerID)
+	app.Flag("upgrade-no-block", "Do not block when repository format upgrade is in progress, instead exit with a message.").Hidden().Default("false").Envar(c.EnvName("OADP_REPO_UPGRADE_NO_BLOCK")).BoolVar(&c.doNotWaitForUpgrade)
 	app.Flag("error-notifications", "Send notification on errors").Hidden().
-		Envar(c.EnvName("KOPIA_SEND_ERROR_NOTIFICATIONS")).
+		Envar(c.EnvName("OADP_SEND_ERROR_NOTIFICATIONS")).
 		Default(errorNotificationsNonInteractive).
 		EnumVar(&c.errorNotifications, errorNotificationsAlways, errorNotificationsNever, errorNotificationsNonInteractive)
 
@@ -307,23 +305,15 @@ func (c *App) setup(app *kingpin.Application) {
 	c.progress.setup(c, app)
 
 	c.blob.setup(c, app)
-	c.benchmark.setup(c, app)
 	c.cache.setup(c, app)
 	c.content.setup(c, app)
-	c.diff.setup(c, app)
 	c.index.setup(c, app)
-	c.list.setup(c, app)
 	c.logs.setup(c, app)
-	c.notification.setup(c, app)
-	c.server.setup(c, app)
 	c.session.setup(c, app)
 	c.restore.setup(c, app)
 	c.show.setup(c, app)
 	c.snapshot.setup(c, app)
 	c.manifest.setup(c, app)
-	c.policy.setup(c, app)
-	c.mount.setup(c, app)
-	c.maintenance.setup(c, app)
 	c.repository.setup(c, app)
 }
 
@@ -337,18 +327,6 @@ func NewApp() *App {
 	return &App{
 		progress: &cliProgress{},
 		cliStorageProviders: []StorageProvider{
-			{"from-config", "the provided configuration file", func() StorageFlags { return &storageFromConfigFlags{} }},
-
-			{"azure", "an Azure blob storage", func() StorageFlags { return &storageAzureFlags{} }},
-			{"b2", "a B2 bucket", func() StorageFlags { return &storageB2Flags{} }},
-			{"filesystem", "a filesystem", func() StorageFlags { return &storageFilesystemFlags{} }},
-			{"gcs", "a Google Cloud Storage bucket", func() StorageFlags { return &storageGCSFlags{} }},
-			{"gdrive", "a Google Drive folder", func() StorageFlags { return &storageGDriveFlags{} }},
-
-			{"rclone", "a rclone-based provided", func() StorageFlags { return &storageRcloneFlags{} }},
-			{"s3", "an S3 bucket", func() StorageFlags { return &storageS3Flags{} }},
-			{"sftp", "an SFTP storage", func() StorageFlags { return &storageSFTPFlags{} }},
-			{"webdav", "a WebDAV storage", func() StorageFlags { return &storageWebDAVFlags{} }},
 		},
 
 		// testability hooks

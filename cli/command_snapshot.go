@@ -16,17 +16,9 @@ type commandSnapshot struct {
 }
 
 func (c *commandSnapshot) setup(svc advancedAppServices, parent commandParent) {
-	cmd := parent.Command("snapshot", "Commands to manipulate snapshots.").Alias("snap")
-	c.copyHistory.setup(svc, cmd, false)
-	c.moveHistory.setup(svc, cmd, true)
+	cmd := parent.Command("backup", "Commands to manipulate backups.").Alias("bkp")
 	c.create.setup(svc, cmd)
 	c.delete.setup(svc, cmd)
-	c.estimate.setup(svc, cmd)
-	c.expire.setup(svc, cmd)
-	c.fix.setup(svc, cmd)
 	c.list.setup(svc, cmd)
-	c.migrate.setup(svc, cmd)
-	c.pin.setup(svc, cmd)
 	c.restore.setup(svc, cmd)
-	c.verify.setup(svc, cmd)
 }
