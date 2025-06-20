@@ -1,0 +1,130 @@
+# Copyright 2025 Red Hat Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+TAG ?= latest
+IMAGE ?= quay.io/migtools/kopia
+IMAGE_REF := $(IMAGE):$(TAG)
+
+PLATFORMS ?= linux/amd64,linux/arm64
+BUILDTAGS ?=
+BIN ?= kopia
+
+# Detect container tool: docker or podman
+CONTAINER_TOOL ?= $(shell \
+	if command -v docker >/dev/null 2>&1; then echo docker; \
+	elif command -v podman >/dev/null 2>&1; then echo podman; \
+	else echo ""; \
+	fi \
+)
+
+ifeq ($(shell command -v $(CONTAINER_TOOL) >/dev/null 2>&1 && echo found),)
+  $(error Container tool '$(CONTAINER_TOOL)' not found)
+endif
+
+BUILDPLATFORM ?= $(shell uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+BUILDPLATFORM := linux/$(BUILDPLATFORM)
+
+$(info Using Container Tool: $(CONTAINER_TOOL))
+
+.PHONY: all container-build container-build-push podman-push clean
+
+all: container-build
+
+##@ General
+
+# The help target prints out all targets with their descriptions organized
+# beneath their categories. The categories are represented by '##@' and the
+# target descriptions by '##'. The awk command is responsible for reading the
+# entire set of makefiles included in this invocation, looking for lines of the
+# file as xyz: ## something, and then pretty-format the target and help. Then,
+# if there's a line with ##@ something, that gets pretty-printed as a category.
+# More info on the usage of ANSI control characters for terminal formatting:
+# https://en.wikipedia.org/wiki/ANSI_escape_code#SGR_parameters
+# More info on the awk command:
+# http://linuxcommand.org/lc3_adv_awk.php
+
+.PHONY: help
+help: ## Display this help.
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+container-build: ## Build container image locally
+ifeq ($(CONTAINER_TOOL),docker)
+	$(CONTAINER_TOOL) buildx build \
+		--platform $(PLATFORMS) \
+		--build-arg BUILDTAGS="$(BUILDTAGS)" \
+		--build-arg BIN=$(BIN) \
+		-t $(IMAGE_REF) \
+		--load \
+		.
+else ifeq ($(CONTAINER_TOOL),podman)
+	@echo "Building for amd64 with Podman..."
+	$(CONTAINER_TOOL) build --arch amd64 \
+		--build-arg BUILDTAGS="$(BUILDTAGS)" \
+		--build-arg BIN=$(BIN) \
+		--build-arg BUILDPLATFORM=linux/amd64 \
+		-t $(IMAGE):amd64-$(TAG) \
+		.
+
+	@echo "Building for arm64 with Podman..."
+	$(CONTAINER_TOOL) build --arch arm64 \
+		--build-arg BUILDTAGS="$(BUILDTAGS)" \
+		--build-arg BIN=$(BIN) \
+		--build-arg BUILDPLATFORM=linux/arm64 \
+		-t $(IMAGE):arm64-$(TAG) \
+		.
+endif
+
+container-build-push: ## Build and push to registry
+ifeq ($(CONTAINER_TOOL),docker)
+	$(CONTAINER_TOOL) buildx build \
+		--platform $(PLATFORMS) \
+		--build-arg BUILDTAGS="$(BUILDTAGS)" \
+		--build-arg BIN=$(BIN) \
+		-t $(IMAGE_REF) \
+		--push \
+		.
+else ifeq ($(CONTAINER_TOOL),podman)
+	@echo "Building and pushing for amd64 with Podman..."
+	$(CONTAINER_TOOL) build --arch amd64 \
+		--build-arg BUILDTAGS="$(BUILDTAGS)" \
+		--build-arg BIN=$(BIN) \
+		--build-arg BUILDPLATFORM=linux/amd64 \
+		-t $(IMAGE):amd64-$(TAG) \
+		.
+
+	$(CONTAINER_TOOL) push $(IMAGE):amd64-$(TAG)
+
+	@echo "Building and pushing for arm64 with Podman..."
+	$(CONTAINER_TOOL) build --arch arm64 \
+		--build-arg BUILDTAGS="$(BUILDTAGS)" \
+		--build-arg BIN=$(BIN) \
+		--build-arg BUILDPLATFORM=linux/arm64 \
+		-t $(IMAGE):arm64-$(TAG) \
+		.
+
+	$(CONTAINER_TOOL) push $(IMAGE):arm64-$(TAG)
+
+	@echo "Creating and pushing manifest..."
+	$(CONTAINER_TOOL) manifest create $(IMAGE_REF) \
+		$(IMAGE):amd64-$(TAG) \
+		$(IMAGE):arm64-$(TAG)
+
+	$(CONTAINER_TOOL) manifest push --all $(IMAGE_REF)
+endif
+
+push: ## Push existing images
+	$(CONTAINER_TOOL) push $(IMAGE_REF)
+
+clean: ## Remove local images
+	-$(CONTAINER_TOOL) image rm -f $(IMAGE_REF) || true
