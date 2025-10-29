@@ -54,7 +54,7 @@ func (c *App) openRepository(ctx context.Context, required bool) (repo.Repositor
 			return nil, nil
 		}
 
-		return nil, errors.New("repository is not connected. See https://kopia.io/docs/repositories/")
+		return nil, errors.New("repository is not connected")
 	}
 
 	c.maybePrintUpdateNotification(ctx)
@@ -66,7 +66,7 @@ func (c *App) openRepository(ctx context.Context, required bool) (repo.Repositor
 
 	r, err := repo.Open(ctx, c.repositoryConfigFileName(), pass, c.optionsFromFlags(ctx))
 	if os.IsNotExist(err) {
-		return nil, errors.New("not connected to a repository, use 'kopia connect'")
+		return nil, errors.New("not connected to a repository, use 'oadp-vmdp bslserver connect'")
 	}
 
 	return r, errors.Wrap(err, "unable to open repository")

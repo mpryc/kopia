@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
@@ -79,6 +80,28 @@ func (c *storageS3Flags) preActionLoadPEMBase64(_ *kingpin.ParseContext) error {
 	return nil
 }
 
+// normalizeOADPPrefix prepends "oadp-vmdp/" to the user-provided prefix.
+// It handles various user input formats:
+// - Errors out if user prefix contains "oadp-vmdp" (case-insensitive)
+// - Removes leading slashes from user prefix
+// - Always prepends "oadp-vmdp/" to the result
+// - Preserves trailing slashes from user input
+func normalizeOADPPrefix(userPrefix string) (string, error) {
+	const oadpPrefix = "oadp-vmdp/"
+
+	// Check if user is trying to provide the oadp-vmdp prefix themselves
+	lowerPrefix := strings.ToLower(userPrefix)
+	if strings.Contains(lowerPrefix, "oadp-vmdp") {
+		return "", errors.New("prefix must not contain 'oadp-vmdp' - this prefix is automatically added")
+	}
+
+	// Remove leading slashes from user prefix
+	cleanedPrefix := strings.TrimLeft(userPrefix, "/")
+
+	// Combine oadp prefix with cleaned user prefix
+	return oadpPrefix + cleanedPrefix, nil
+}
+
 func (c *storageS3Flags) Connect(ctx context.Context, isCreate bool, formatVersion int) (blob.Storage, error) {
 	_ = formatVersion
 
@@ -86,6 +109,16 @@ func (c *storageS3Flags) Connect(ctx context.Context, isCreate bool, formatVersi
 		return nil, errors.New("Cannot specify a 'point-in-time' option when creating a repository")
 	}
 
+	// Normalize the prefix with oadp-vmdp/ prepended
+	normalizedPrefix, err := normalizeOADPPrefix(c.s3options.Prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a copy of options with the normalized prefix
+	opts := c.s3options
+	opts.Prefix = normalizedPrefix
+
 	//nolint:wrapcheck
-	return s3.New(ctx, &c.s3options, isCreate)
+	return s3.New(ctx, &opts, isCreate)
 }

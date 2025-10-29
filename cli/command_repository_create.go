@@ -17,11 +17,6 @@ import (
 	"github.com/kopia/kopia/snapshot/policy"
 )
 
-const runValidationNote = `NOTE: To validate that your provider is compatible with Kopia, please run:
-
-$ kopia repository validate-provider
-
-`
 
 type commandRepositoryCreate struct {
 	createBlockHashFormat             string
@@ -158,8 +153,6 @@ func (c *commandRepositoryCreate) runCreateCommandWithStorage(ctx context.Contex
 		return errors.Wrap(err, "error populating repository")
 	}
 
-	noteColor.Fprintf(c.out.stdout(), runValidationNote) //nolint:errcheck
-
 	return nil
 }
 
@@ -184,8 +177,6 @@ func (c *commandRepositoryCreate) populateRepository(ctx context.Context, passwo
 		rows = appendCompressionPolicyRows(rows, policy.DefaultPolicy, &policy.Definition{})
 
 		c.out.printStdout("%v\n", alignedPolicyTableRows(rows))
-
-		c.out.printStderr("\nTo find more information about default policy run 'kopia policy get'.\nTo change the policy use 'kopia policy set' command.\n")
 
 		if err := setDefaultMaintenanceParameters(ctx, w); err != nil {
 			return errors.Wrap(err, "unable to set maintenance parameters")

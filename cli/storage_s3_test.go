@@ -62,3 +62,99 @@ func TestLoadPEMBoth(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "mutually exclusive")
 }
+
+func TestNormalizeOADPPrefix(t *testing.T) {
+	tests := []struct {
+		name        string
+		userPrefix  string
+		expected    string
+		expectError bool
+	}{
+		{
+			name:        "prefix with trailing slash",
+			userPrefix:  "abc/",
+			expected:    "oadp-vmdp/abc/",
+			expectError: false,
+		},
+		{
+			name:        "prefix without trailing slash",
+			userPrefix:  "abc",
+			expected:    "oadp-vmdp/abc",
+			expectError: false,
+		},
+		{
+			name:        "prefix with leading and trailing slash",
+			userPrefix:  "/abc/bce/",
+			expected:    "oadp-vmdp/abc/bce/",
+			expectError: false,
+		},
+		{
+			name:        "prefix with leading slash no trailing slash",
+			userPrefix:  "/abc/bce",
+			expected:    "oadp-vmdp/abc/bce",
+			expectError: false,
+		},
+		{
+			name:        "just slash",
+			userPrefix:  "/",
+			expected:    "oadp-vmdp/",
+			expectError: false,
+		},
+		{
+			name:        "empty string",
+			userPrefix:  "",
+			expected:    "oadp-vmdp/",
+			expectError: false,
+		},
+		{
+			name:        "multiple leading slashes",
+			userPrefix:  "///abc/",
+			expected:    "oadp-vmdp/abc/",
+			expectError: false,
+		},
+		// Error cases: user provides oadp-vmdp in prefix
+		{
+			name:        "user provides exact oadp-vmdp prefix",
+			userPrefix:  "oadp-vmdp/",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "user provides oadp-vmdp with leading slash",
+			userPrefix:  "/oadp-vmdp/",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "user provides oadp-vmdp in middle",
+			userPrefix:  "some/oadp-vmdp/path",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "user provides uppercase OADP-VMDP",
+			userPrefix:  "OADP-VMDP/",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "user provides mixed case OaDp-VmDp",
+			userPrefix:  "OaDp-VmDp/backup",
+			expected:    "",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := normalizeOADPPrefix(tt.userPrefix)
+			if tt.expectError {
+				require.Error(t, err, "normalizeOADPPrefix(%q) should return an error", tt.userPrefix)
+				require.Contains(t, err.Error(), "must not contain 'oadp-vmdp'")
+			} else {
+				require.NoError(t, err, "normalizeOADPPrefix(%q) should not return an error", tt.userPrefix)
+				require.Equal(t, tt.expected, result, "normalizeOADPPrefix(%q) should return %q", tt.userPrefix, tt.expected)
+			}
+		})
+	}
+}

@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -20,8 +22,70 @@ import (
 
 const configDirMode = 0o700
 
+const oadpPrefix = "oadp-vmdp/"
+
 // ErrCannotWriteToRepoConnectionWithPermissiveCacheLoading error to indicate.
 var ErrCannotWriteToRepoConnectionWithPermissiveCacheLoading = errors.New("cannot write to repo connection with permissive cache loading")
+
+// denormalizeOADPPrefix removes the "oadp-vmdp/" prefix from an S3 connection's prefix if present.
+// This is used when saving config to store only the user-provided prefix.
+// Uses reflection to avoid import cycles with blob/s3 package.
+func denormalizeOADPPrefix(ci *blob.ConnectionInfo) {
+	if ci.Type != "s3" || ci.Config == nil {
+		return
+	}
+
+	// Use reflection to access the Prefix field
+	v := reflect.ValueOf(ci.Config)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	if v.Kind() != reflect.Struct {
+		return
+	}
+
+	prefixField := v.FieldByName("Prefix")
+	if !prefixField.IsValid() || !prefixField.CanSet() || prefixField.Kind() != reflect.String {
+		return
+	}
+
+	currentPrefix := prefixField.String()
+	prefixField.SetString(strings.TrimPrefix(currentPrefix, oadpPrefix))
+}
+
+// normalizeOADPPrefix prepends "oadp-vmdp/" to an S3 connection's prefix if not already present.
+// This is used when loading config to apply the runtime prefix normalization.
+// Uses reflection to avoid import cycles with blob/s3 package.
+func normalizeOADPPrefix(ci *blob.ConnectionInfo) {
+	if ci.Type != "s3" || ci.Config == nil {
+		return
+	}
+
+	// Use reflection to access the Prefix field
+	v := reflect.ValueOf(ci.Config)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	if v.Kind() != reflect.Struct {
+		return
+	}
+
+	prefixField := v.FieldByName("Prefix")
+	if !prefixField.IsValid() || !prefixField.CanSet() || prefixField.Kind() != reflect.String {
+		return
+	}
+
+	currentPrefix := prefixField.String()
+
+	// Only add the prefix if it's not already there
+	if !strings.HasPrefix(currentPrefix, oadpPrefix) {
+		// Remove any leading slashes from user prefix
+		cleanedPrefix := strings.TrimLeft(currentPrefix, "/")
+		prefixField.SetString(oadpPrefix + cleanedPrefix)
+	}
+}
 
 // ClientOptions contains client-specific options that are persisted in local configuration file.
 type ClientOptions struct {
@@ -115,6 +179,26 @@ func (lc *LocalConfig) writeToFile(filename string) error {
 		}
 	}
 
+	// Denormalize S3 prefix before saving (remove "oadp-vmdp/" prefix)
+	if lc2.Storage != nil {
+		// Make a copy of the storage config to avoid modifying the original
+		storageCopy := *lc2.Storage
+		lc2.Storage = &storageCopy
+
+		// If it's S3 and has a Config, make a deep copy of the config struct
+		if lc2.Storage.Type == "s3" && lc2.Storage.Config != nil {
+			configValue := reflect.ValueOf(lc2.Storage.Config)
+			if configValue.Kind() == reflect.Ptr && !configValue.IsNil() {
+				// Create a new instance of the same type
+				configCopy := reflect.New(configValue.Elem().Type())
+				configCopy.Elem().Set(configValue.Elem())
+				lc2.Storage.Config = configCopy.Interface()
+			}
+		}
+
+		denormalizeOADPPrefix(lc2.Storage)
+	}
+
 	b, err := json.MarshalIndent(lc2, "", "  ")
 	if err != nil {
 		return errors.Wrap(err, "error creating config file contents")
@@ -155,6 +239,11 @@ func LoadConfigFromFile(fileName string) (*LocalConfig, error) {
 
 	if lc.PermissiveCacheLoading && os.Getenv("KOPIA_UPGRADE_LOCK_ENABLED") == "" {
 		return nil, errors.New("must have set KOPIA_UPGRADE_LOCK_ENABLED when connecting to repository with permissive cache loading")
+	}
+
+	// Normalize S3 prefix after loading (add "oadp-vmdp/" prefix at runtime)
+	if lc.Storage != nil {
+		normalizeOADPPrefix(lc.Storage)
 	}
 
 	return &lc, nil
