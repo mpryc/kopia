@@ -327,6 +327,7 @@ func NewApp() *App {
 	return &App{
 		progress: &cliProgress{},
 		cliStorageProviders: []StorageProvider{
+			{"s3", "an S3 bucket", func() StorageFlags { return &storageS3Flags{} }},
 		},
 
 		// testability hooks

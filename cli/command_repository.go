@@ -19,6 +19,7 @@ func (c *commandRepository) setup(svc advancedAppServices, parent commandParent)
 	cmd := parent.Command("bslserver", "Commands to connect repository.").Alias("bsls")
 
 	c.connect.setup(svc, cmd)
+	c.create.setup(svc, cmd)
 	c.disconnect.setup(svc, cmd)
 	c.status.setup(svc, cmd)
 }

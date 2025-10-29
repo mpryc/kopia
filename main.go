@@ -3,9 +3,9 @@ Command-line tool for creating and accessing backups.
 
 Usage:
 
-	$ oadp [<flags>] <subcommand> [<args> ...]
+	$ oadp-vmdp [<flags>] <subcommand> [<args> ...]
 
-Use 'oadp help' to see more details.
+Use 'oadp-vmdp help' to see more details.
 */
 package main
 
@@ -65,7 +65,7 @@ Commands (use --help-full to list all commands):
 
 func main() {
 	app := cli.NewApp()
-	kp := kingpin.New("oadp", "oadp - Easily Backup and Restore Files from Your OpenShift KubeVirt VMs").Author("http://kopia.github.io/")
+	kp := kingpin.New("oadp-vmdp", "oadp-vmdp - Virtual Machine Data Protection for OpenShift Virtualization").Author("Red Hat, Inc. <https://www.redhat.com/>")
 
 	kp.Version(repo.BuildVersion + " build: " + repo.BuildInfo + " from: " + repo.BuildGitHubRepo)
 	logfile.Attach(app, kp)
