@@ -66,7 +66,7 @@ func (c *App) openRepository(ctx context.Context, required bool) (repo.Repositor
 
 	r, err := repo.Open(ctx, c.repositoryConfigFileName(), pass, c.optionsFromFlags(ctx))
 	if os.IsNotExist(err) {
-		return nil, errors.New("not connected to a repository, use 'oadp-vmdp bslserver connect'")
+		return nil, errors.New("not connected to a repository, use 'oadp-vmdp bsl connect'")
 	}
 
 	return r, errors.Wrap(err, "unable to open repository")

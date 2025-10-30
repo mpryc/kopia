@@ -16,7 +16,7 @@ type commandRepository struct {
 }
 
 func (c *commandRepository) setup(svc advancedAppServices, parent commandParent) {
-	cmd := parent.Command("bslserver", "Commands to connect repository.").Alias("bsls")
+	cmd := parent.Command("bsl", "Commands to manage Backup Storage Location (BSL) - can be S3 or server.").Alias("bsls")
 
 	c.connect.setup(svc, cmd)
 	c.create.setup(svc, cmd)

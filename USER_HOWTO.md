@@ -10,12 +10,12 @@ Your administrator should have provided you with:
 - Access key ID
 - Secret access key
 
-## First-Time Setup: Connect to Your Backup Repository
+## First-Time Setup: Connect to Your Backup Storage Location (BSL)
 
-Before creating backups, you need to connect to your backup repository. Run this command once:
+Before creating backups, you need to connect to your Backup Storage Location (BSL). The BSL can be an S3-compatible storage or a server. Run this command once:
 
 ```bash
-oadp-vmdp bslserver create s3 \
+oadp-vmdp bsl create s3 \
   --bucket=YOUR_BUCKET_NAME \
   --endpoint=YOUR_S3_ENDPOINT \
   --access-key=YOUR_ACCESS_KEY \
@@ -84,26 +84,26 @@ oadp-vmdp restore /home/myuser/documents --target=/tmp/restored-docs
 oadp-vmdp backup restore /home/myuser/important-file.txt
 ```
 
-## Connecting to an Existing Repository
+## Connecting to an Existing BSL
 
-If you already created a repository and need to reconnect (e.g., after a reboot):
+If you already created a BSL (Backup Storage Location) and need to reconnect (e.g., after a reboot):
 
 ```bash
-oadp-vmdp bslserver connect s3 \
+oadp-vmdp bsl connect s3 \
   --bucket=YOUR_BUCKET_NAME \
   --endpoint=YOUR_S3_ENDPOINT \
   --access-key=YOUR_ACCESS_KEY \
   --secret-access-key=YOUR_SECRET_KEY
 ```
 
-Enter the password you set during repository creation.
+Enter the password you set during BSL creation.
 
-## Disconnecting from Repository
+## Disconnecting from BSL
 
 When you're done:
 
 ```bash
-oadp-vmdp bslserver disconnect
+oadp-vmdp bsl disconnect
 ```
 
 ## Common Tips
@@ -111,7 +111,7 @@ oadp-vmdp bslserver disconnect
 - **Backup regularly**: Schedule regular backups of your important folders
 - **Test your restores**: Occasionally test restoring to make sure your backups work
 - **Keep your password safe**: Without it, you cannot restore your backups
-- **Check backup status**: Use `oadp-vmdp bslserver status` to verify your connection
+- **Check backup status**: Use `oadp-vmdp bsl status` to verify your BSL connection
 
 ## Need Help?
 
